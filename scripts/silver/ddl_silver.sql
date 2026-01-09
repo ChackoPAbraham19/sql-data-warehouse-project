@@ -97,8 +97,10 @@ END
 GO
 
 CREATE TABLE silver.erp_px_cat_g1v2 (
-    cid   NVARCHAR(50),
-    cntry NVARCHAR(50),
+    id   NVARCHAR(50),
+    cat  NVARCHAR(50),
+ subcat  NVARCHAR(50),
+ maintenance NVARCHAR(50) ,
     dwh_create_date    DATETIME2 DEFAULT GETDATE()
 );
 GO

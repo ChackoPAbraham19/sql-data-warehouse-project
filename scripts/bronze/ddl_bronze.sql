@@ -1,3 +1,5 @@
+USE DataWarehouse;
+GO
 
 IF OBJECT_ID('bronze.crm_cust_info','U') IS NOT NULL
 BEGIN
@@ -89,7 +91,9 @@ END
 GO
 
 CREATE TABLE bronze.erp_px_cat_g1v2 (
-    cid   NVARCHAR(50),
-    cntry NVARCHAR(50)
+    id   NVARCHAR(50),
+    cat  NVARCHAR(50),
+ subcat  NVARCHAR(50),
+ maintenance NVARCHAR(50)    
 );
 GO

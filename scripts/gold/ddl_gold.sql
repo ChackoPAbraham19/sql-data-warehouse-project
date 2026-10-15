@@ -1,70 +1,99 @@
-CREATE VIEW gold.dim_customers AS
-SELECT
-   ROW_NUMBER() OVER (ORDER BY cst_id) AS customer_key,
-   ci.cst_id as customer_id,
-   ci.cst_key as customer_number,
-   ci.cst_firstname as first_name,
-   ci.cst_lastname as last_name,
-   la.cntry as country,
-   ci.cst_marital_status as marital_staus,
-   CASE WHEN ci.cst_gndr != 'n/a' THEN ci.cst_gndr 
-        ELSE COALESCE(ca.gen,'n/a') 
-   END AS gender, 
-   ca.bdate as birthdate,
-   ci.cst_create_date as create_date
-   
-   
-FROM silver.crm_cust_info ci
-LEFT JOIN silver.erp_cust_az12 ca
-ON ci.cst_key = ca.cid
-LEFT JOIN silver.erp_loc_a101 la
-ON ci.cst_key =la.cid
+/*
+===============================================================================
+Purpose     : Creates the Gold layer as physical, indexed tables (star schema
+              plus a pre-aggregated monthly sales table).
+
+Notes       :
+- Populated by gold.load_gold (proc_load_gold.sql)
+- Earlier versions of Gold were views; any leftover views are dropped here
+===============================================================================
+*/
+
+USE DataWarehouse;
+GO
+
+-- Drop objects from the view-based version of Gold
+IF OBJECT_ID('gold.fact_sales','V')    IS NOT NULL DROP VIEW gold.fact_sales;
+IF OBJECT_ID('gold.dim_customers','V') IS NOT NULL DROP VIEW gold.dim_customers;
+IF OBJECT_ID('gold.dim_products','V')  IS NOT NULL DROP VIEW gold.dim_products;
+IF OBJECT_ID('gold.dim_product','V')   IS NOT NULL DROP VIEW gold.dim_product;
+GO
+
+IF OBJECT_ID('gold.agg_sales_monthly','U') IS NOT NULL DROP TABLE gold.agg_sales_monthly;
+IF OBJECT_ID('gold.fact_sales','U')        IS NOT NULL DROP TABLE gold.fact_sales;
+IF OBJECT_ID('gold.dim_customers','U')     IS NOT NULL DROP TABLE gold.dim_customers;
+IF OBJECT_ID('gold.dim_products','U')      IS NOT NULL DROP TABLE gold.dim_products;
+GO
 
 
+CREATE TABLE gold.dim_customers (
+    customer_key    INT          NOT NULL PRIMARY KEY,
+    customer_id     INT,
+    customer_number NVARCHAR(50),
+    first_name      NVARCHAR(50),
+    last_name       NVARCHAR(50),
+    country         NVARCHAR(50),
+    marital_status  NVARCHAR(50),
+    gender          NVARCHAR(50),
+    birthdate       DATE,
+    create_date     DATE
+);
+GO
+
+CREATE INDEX IX_dim_customers_customer_id ON gold.dim_customers (customer_id);
+GO
 
 
+CREATE TABLE gold.dim_products (
+    product_key          INT          NOT NULL PRIMARY KEY,
+    product_id           INT,
+    product_number       NVARCHAR(50),
+    product_name         NVARCHAR(50),
+    category_id          NVARCHAR(50),
+    category             NVARCHAR(50),
+    subcategory          NVARCHAR(50),
+    maintenance_required NVARCHAR(50),
+    cost                 INT,
+    product_line         NVARCHAR(50),
+    start_date           DATE
+);
+GO
 
-CREATE VIEW gold.dim_product AS
-SELECT
- ROW_NUMBER() OVER (ORDER BY pn.prd_start_dt ,pn.prd_key) AS product_key,
- pn.prd_id AS product_id,
- pn.prd_key AS product_number,
- pn.prd_nm AS product_name,
- pn.cat_id AS category_id,
- pc.cat AS category,
- pc.subcat AS subcategory,
- pc.maintenance,
- pn.prd_cost AS product_cost,
- pn.prd_line AS product_line,
- pn.prd_start_dt AS start_date
-
-FROM silver.crm_prd_info pn
-LEFT JOIN silver.erp_px_cat_g1v2 pc
-ON pn.cat_id = pc.id
-WHERE prd_end_dt IS NULL
+CREATE INDEX IX_dim_products_product_number ON gold.dim_products (product_number);
+GO
 
 
+CREATE TABLE gold.fact_sales (
+    order_number  NVARCHAR(50),
+    product_key   INT,
+    customer_key  INT,
+    order_date    DATE,
+    shipping_date DATE,
+    due_date      DATE,
+    sales_amount  INT,
+    quantity      INT,
+    price         INT
+);
+GO
 
-CREATE VIEW gold.fact_sales AS
-SELECT
-sd.sls_ord_num AS order_number,
-pr.product_key,
-cu.customer_key,
-sd.sls_order_dt AS order_date,
-sd.sls_ship_dt AS shipping_date,
-sd.sls_due_dt AS due_date,
-sd.sls_sales AS sales_amount,
-sd.sls_quantity AS quantity,
-sd.sls_price AS price
-FROM silver.crm_sales_details sd
-LEFT JOIN gold.dim_product pr
-ON sd.sls_prd_key = pr.product_number
-LEFT JOIN gold.dim_customers cu
-ON sd.sls_cust_id = cu.customer_id
-
-
+CREATE CLUSTERED INDEX CIX_fact_sales_order_date ON gold.fact_sales (order_date);
+CREATE INDEX IX_fact_sales_customer_key ON gold.fact_sales (customer_key) INCLUDE (sales_amount);
+CREATE INDEX IX_fact_sales_product_key  ON gold.fact_sales (product_key)  INCLUDE (sales_amount);
+GO
 
 
+-- One row per month x category x subcategory x country
+CREATE TABLE gold.agg_sales_monthly (
+    order_month  DATE,
+    category     NVARCHAR(50),
+    subcategory  NVARCHAR(50),
+    country      NVARCHAR(50),
+    sales_amount INT,
+    quantity     INT,
+    order_lines  INT
+);
+GO
 
-
-
+CREATE CLUSTERED INDEX CIX_agg_sales_monthly
+    ON gold.agg_sales_monthly (order_month, category, subcategory, country);
+GO

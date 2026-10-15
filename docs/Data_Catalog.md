@@ -59,3 +59,19 @@ The Gold Layer is the business-level data representation, structured to support 
 | sales_amount    | INT           | The total monetary value of the sale for the line item, in whole currency units (e.g., 25).   |
 | quantity        | INT           | The number of units of the product ordered for the line item (e.g., 1).                       |
 | price           | INT           | The price per unit of the product for the line item, in whole currency units (e.g., 25).      |
+
+---
+
+### 4. **gold.agg_sales_monthly**
+- **Purpose:** Pre-aggregated sales at month × category × subcategory × country grain, for fast trend and breakdown reporting without joining the fact table to the dimensions.
+- **Columns:**
+
+| Column Name     | Data Type     | Description                                                                                   |
+|-----------------|---------------|-----------------------------------------------------------------------------------------------|
+| order_month     | DATE          | First day of the order month (e.g., 2013-01-01). NULL for orders with an invalid order date.  |
+| category        | NVARCHAR(50)  | Product category from gold.dim_products (NULL if the product is not in the dimension).       |
+| subcategory     | NVARCHAR(50)  | Product subcategory from gold.dim_products.                                                   |
+| country         | NVARCHAR(50)  | Customer country from gold.dim_customers.                                                     |
+| sales_amount    | INT           | Total sales amount for the group.                                                             |
+| quantity        | INT           | Total units sold for the group.                                                               |
+| order_lines     | INT           | Number of fact_sales rows (order line items) in the group. Additive across groups.           |
